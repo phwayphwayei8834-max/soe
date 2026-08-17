@@ -3,3 +3,4 @@ aiohttp
 opencv-python-headless
 ddddocr
 numpy
+
